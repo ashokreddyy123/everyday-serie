@@ -1,0 +1,97 @@
+content-expiry-notifier/
+│
+├── app/                 # Application code (for backend and frontend)
+│   ├── api/             # API routes (e.g., notification handler)
+│   ├── models/          # Database models for content and reminders
+│   ├── controllers/     # Controller files for business logic
+│   ├── public/          # Static files (e.g., HTML, CSS, JavaScript)
+│   └── views/           # Frontend templates (if using a framework like Flask or Django)
+│
+├── requirements.txt     # Python dependencies or other framework dependencies
+├── .gitignore           # Git ignore file
+└── README.md            # Project documentation
+# Content Expiry Notifier
+
+## Project Description
+
+"Content Expiry Notifier" is a simple web application designed to help content creators and marketers track the expiration dates of their time-sensitive content. Users can input content details, set expiration dates, and receive automated notifications before the content expires. This tool aims to improve content management efficiency and prevent outdated or irrelevant content from being displayed.
+
+## Features Overview
+
+- **Content Entry:** Add your content's URL or details with expiration date.
+- **Email Notifications:** Get notified 3 days before content expiration.
+- **Customizable Preferences:** Set your own notification frequency and expiry thresholds.
+- **Dashboard:** See a list of your content and manage notifications.
+- **Integration:** Sync expiration dates with Google Calendar for visibility.
+
+## Setup Instructions
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/yourusername/content-expiry-notifier.git
+   cd content-expiry-notifier
+pip install -r requirements.txt
+EMAIL_HOST=smtp.your-email.com
+EMAIL_PORT=587
+EMAIL_USER=your-email@example.com
+EMAIL_PASSWORD=your-password
+python app.py
+
+#### Basic Implementation
+
+For the basic implementation, I will use Flask for the backend and SQLite for the database.
+
+**Example of Flask Backend (app.py)**:
+
+```python
+from flask import Flask, render_template, request, redirect
+from flask_sqlalchemy import SQLAlchemy
+import smtplib
+from email.mime.text import MIMEText
+from datetime import datetime, timedelta
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///content.db'
+db = SQLAlchemy(app)
+
+class Content(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    url = db.Column(db.String(100), nullable=False)
+    expiration_date = db.Column(db.DateTime, nullable=False)
+    notified = db.Column(db.Boolean, default=False)
+
+@app.route('/')
+def index():
+    contents = Content.query.all()
+    return render_template('index.html', contents=contents)
+
+@app.route('/add', methods=['POST'])
+def add_content():
+    url = request.form['url']
+    expiration_date = datetime.strptime(request.form['expiration_date'], '%Y-%m-%d')
+    new_content = Content(url=url, expiration_date=expiration_date)
+    db.session.add(new_content)
+    db.session.commit()
+    return redirect('/')
+
+@app.route('/notify', methods=['GET'])
+def notify():
+    contents = Content.query.filter(Content.expiration_date <= datetime.now() + timedelta(days=3), Content.notified == False).all()
+    for content in contents:
+        send_email(content)
+        content.notified = True
+        db.session.commit()
+    return 'Notifications sent!'
+
+def send_email(content):
+    msg = MIMEText(f"Your content at {content.url} will expire on {content.expiration_date.strftime('%Y-%m-%d')}.")
+    msg['Subject'] = 'Content Expiry Reminder'
+    msg['From'] = 'your-email@example.com'
+    msg['To'] = 'recipient@example.com'
+    with smtplib.SMTP('smtp.your-email.com') as server:
+        server.login('your-email@example.com', 'your-password')
+        server.sendmail(msg['From'], msg['To'], msg.as_string())
+
+if __name__ == '__main__':
+    app.run(debug=True)
